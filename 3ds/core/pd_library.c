@@ -330,7 +330,8 @@ size_t pd_library_cache_write(const struct pd_library* l, char* out, size_t len)
 enum row {
     R_LIBRARY, R_VIEW, R_SORT,
     R_SCREEN, R_THEME, R_DARK, R_PICTURE,
-    R_SOUND, R_VOLUME, R_MUTE,
+    R_COMPANION_VIEW, R_BACKGROUND, R_FRAME, // one screen only (pd_library_screen)
+    R_SOUND, R_VOLUME, R_MUTE, R_CLICK,
     R_BATTLE, R_STYLE, R_HINTS, R_INFO,
     R_FIELD, R_HUD, R_FLY,
     R_APP, R_VERSION, R_DEV,
@@ -354,8 +355,24 @@ static int themes(int* ids) {
     return n;
 }
 
+static bool row_shown(const struct pd_library* l, int row) {
+    if (row == R_COMPANION_VIEW || row == R_BACKGROUND || row == R_FRAME || row == R_CLICK) return lib_one_screen;
+    if (row == R_DEV) return l->host && l->host->devLine;
+    return true;
+}
+
 int lib_settings_rows(const struct pd_library* l) {
-    return l->host && l->host->devLine ? R_ROWS : R_ROWS - 1;
+    int n = 0;
+    for (int r = 0; r < R_ROWS; r++) n += row_shown(l, r);
+    return n;
+}
+
+// A row as the list shows it (the rows this host has, in order) -> enum row; past the list (R_CORE) as it is.
+static int real_row(const struct pd_library* l, int shown) {
+    if (shown < 0 || shown >= R_ROWS) return shown;
+    for (int r = 0; r < R_ROWS; r++)
+        if (row_shown(l, r) && shown-- == 0) return r;
+    return R_ROWS;
 }
 
 static const char* on_off(bool on) { return on ? "ON" : "OFF"; }
@@ -363,8 +380,7 @@ static const char* on_off(bool on) { return on ? "ON" : "OFF"; }
 static const char* VOLUMES[5] = { "20%", "40%", "60%", "80%", "100%" };
 
 const char* lib_settings_choice(const struct pd_library* l, int row, int choice) {
-    (void) l;
-    switch (row) {
+    switch (real_row(l, row)) {
     case R_THEME: {
         int ids[64];
         int n = themes(ids);
@@ -385,7 +401,7 @@ const char* lib_settings_label(const struct pd_library* l, int row, const char**
     *value = NULL;
     *group = false;
     *choices = 0;
-    switch (row) {
+    switch (real_row(l, row)) {
     case R_LIBRARY: *group = true; return "LIBRARY";
     case R_VIEW: *value = s->libraryGrid ? "GRID" : "LIST"; return "LAYOUT";
     case R_SORT: *value = s->libraryRecent ? "LAST PLAYED" : "NAME"; return "SORT";
@@ -400,6 +416,9 @@ const char* lib_settings_label(const struct pd_library* l, int row, const char**
     case R_DARK: *value = on_off(s->darkMode); return "DARK MODE";
     // VIEW: SCREEN and ASPECT as one pick-list (the companion's too); all seven here, a game without EXPAND reads its size.
     case R_PICTURE: *value = pd_view_name(pd_view_of(s, true)); *choices = PD_VIEWS; return "VIEW";
+    case R_COMPANION_VIEW: *value = s->companionPanel ? "SIDE PANEL" : "WINDOW"; return "COMPANION VIEW";
+    case R_BACKGROUND: *value = s->backgroundOff ? "OFF" : "ANIMATED"; return "BACKGROUND";
+    case R_FRAME: *value = pd_frame_name(s->overlayFrame); return "OVERLAY";
     case R_SOUND: *group = true; return "SOUND";
     case R_VOLUME: {
         int v = (s->gameVolume + 10) / 20 - 1;
@@ -408,6 +427,7 @@ const char* lib_settings_label(const struct pd_library* l, int row, const char**
         return "GAME VOLUME";
     }
     case R_MUTE: *value = on_off(s->gameMuted); return "MUTE GAME";
+    case R_CLICK: *value = on_off(s->clickSound); return "CLICK SOUND";
     case R_BATTLE: *group = true; return "BATTLE";
     case R_STYLE: *value = s->battleGen5 ? "GEN 5" : "GEN 4"; return "BATTLE STYLE";
     case R_HINTS: *value = on_off(!s->hideHints); return "BATTLE HINTS";
@@ -444,7 +464,8 @@ void lib_settings_act(struct pd_library* l, int row) {
     int choices;
     lib_settings_label(l, row, &value, &group, &choices);
     l->settingsSelected = row;
-    if (group || row == R_VERSION || row == R_DEV) return;
+    int real = real_row(l, row);
+    if (group || real == R_VERSION || real == R_DEV) return;
     if (choices) {
         l->pickRow = row;
         l->pickSelected = 0;
@@ -453,11 +474,15 @@ void lib_settings_act(struct pd_library* l, int row) {
         l->dirty = true;
         return;
     }
-    switch (row) {
+    switch (real) {
     case R_VIEW: s->libraryGrid = !s->libraryGrid; l->list.scroll = 0; break;
+    case R_COMPANION_VIEW: s->companionPanel = !s->companionPanel; break;
+    case R_BACKGROUND: s->backgroundOff = !s->backgroundOff; break;
+    case R_FRAME: s->overlayFrame = (s->overlayFrame + 1) % PD_FRAMES; break;
     case R_SORT: s->libraryRecent = !s->libraryRecent; break;
     case R_DARK: s->darkMode = !s->darkMode; break;
     case R_MUTE: s->gameMuted = !s->gameMuted; break;
+    case R_CLICK: s->clickSound = !s->clickSound; break;
     case R_STYLE: s->battleGen5 = !s->battleGen5; break;
     case R_HINTS: s->hideHints = !s->hideHints; break;
     case R_INFO: s->noBattleInfo = !s->noBattleInfo; break;
@@ -465,7 +490,7 @@ void lib_settings_act(struct pd_library* l, int row) {
     case R_FLY: s->flyClassic = !s->flyClassic; break;
     default: return;
     }
-    if (row == R_SORT || row == R_VIEW) relist(l);
+    if (real == R_SORT || real == R_VIEW) relist(l);
     changed(l);
 }
 
@@ -475,7 +500,7 @@ void lib_settings_pick(struct pd_library* l, int choice) {
     l->pickRow = -1;
     l->dirty = true;
     if (choice < 0) return;
-    switch (row) {
+    switch (real_row(l, row)) {
     case R_THEME: {
         int ids[64];
         if (choice < themes(ids)) s->theme = ids[choice];
@@ -529,7 +554,8 @@ static void settings_keys(struct pd_library* l, unsigned down) {
     if (step) {
         int r = l->settingsSelected;
         do r += step;
-        while (r >= 0 && r < rows && (r == R_LIBRARY || r == R_SCREEN || r == R_SOUND || r == R_BATTLE || r == R_FIELD || r == R_APP));
+        while (r >= 0 && r < rows && (real_row(l, r) == R_LIBRARY || real_row(l, r) == R_SCREEN || real_row(l, r) == R_SOUND ||
+                                      real_row(l, r) == R_BATTLE || real_row(l, r) == R_FIELD || real_row(l, r) == R_APP));
         if (r >= 0 && r < rows) l->settingsSelected = r;
         l->settingsFollow = true;
         l->dirty = true;
@@ -678,4 +704,10 @@ void pd_library_touch(struct pd_library* l, int x, int y, bool down) {
     // The tap counts where it went down, if it's still on the same thing.
     if (lib_hit_at(l->touchX, l->touchY) != hit) return;
     tap(l, hit);
+}
+
+uint32_t pd_library_screen_key(const struct pd_library* l) {
+    uint32_t key = (uint32_t) (l->pickRow >= 0);
+    if (l->page == PD_PAGE_EDITOR || l->page == PD_PAGE_TRADE) key |= lib_saves_screen(l) << 1;
+    return key;
 }

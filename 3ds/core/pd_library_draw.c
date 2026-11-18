@@ -172,6 +172,16 @@ static const struct { int x, y, scale; } PETALS[6] = { { 4, 22, 1 }, { 91, 10, 2
 #define PAGE_NIGHT 0x12141C
 
 static uint32_t pageTop[400 * 240], pageBottom[320 * 240];
+int lib_w = 320, lib_h = 240;
+int64_t lib_page_clear = -1;
+bool lib_one_screen;
+
+void pd_library_screen(int w, int h, int64_t clear) {
+    lib_w = w < 320 ? 320 : w > LIB_W_MAX ? LIB_W_MAX : w;
+    lib_h = h < 240 ? 240 : h > LIB_H_MAX ? LIB_H_MAX : h;
+    lib_page_clear = clear;
+    lib_one_screen = true;
+}
 static int pageTopKey = -1, pageBottomKey = -1;
 
 static void make_page(uint32_t* px, int w, int h, bool night) {
@@ -219,6 +229,10 @@ void lib_page_backdrop(struct pd_canvas* c) {
     bool top = c->w == 400;
     uint32_t* page = top ? pageTop : pageBottom;
     int* key = top ? &pageTopKey : &pageBottomKey;
+    if (!top && lib_page_clear >= 0) {
+        pd_fill(c, 0, 0, c->w, c->h, (uint32_t) lib_page_clear);
+        return;
+    }
     if ((c->w != 400 && c->w != 320) || c->h != 240) {
         pd_fill(c, 0, 0, c->w, c->h, pd_dark ? PAGE_NIGHT : PAGE_DAY);
         return;

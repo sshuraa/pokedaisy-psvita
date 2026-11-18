@@ -1,0 +1,17 @@
+#!/bin/sh
+# GNU as's command line on clang's integrated assembler: each --defsym NAME=VALUE becomes a .set line ahead of the source.
+sets=""; src=""; rest=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --defsym) sets="$sets.set ${2%%=*}, ${2#*=}
+"; shift 2;;
+    --defsym=*) d="${1#--defsym=}"; sets="$sets.set ${d%%=*}, ${d#*=}
+"; shift;;
+    -o) rest="$rest -o $2"; shift 2;;
+    -*) rest="$rest $1"; shift;;
+    *) src="$1"; shift;;
+  esac
+done
+CL="clang --target=armv7a-none-eabihf -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard -c -x assembler"
+if [ -z "$sets" ]; then exec $CL $rest "$src"; fi
+{ printf '%s' "$sets"; cat "$src"; } | exec $CL $rest -

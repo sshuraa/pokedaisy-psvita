@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+# clang standing in for VitaSDK's arm-vita-eabi-gcc: the same ABI (armv7-a, Cortex-A9, NEON, hard float, Thumb-2, signed
+# char, short enums, __vita__). Compiles; when linking is asked for, compiles any sources first and hands the objects to
+# arm-vita-eabi-link (ld.lld laid out as VitaSDK's patched GNU ld).
+import os, subprocess, sys, tempfile
+
+SDK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CXX = os.path.basename(sys.argv[0]).endswith('++')
+FLAGS = ['--target=armv7a-none-eabihf', '-mcpu=cortex-a9', '-mfpu=neon', '-mfloat-abi=hard', '-mthumb', '-fsigned-char',
+         '-fshort-enums', '-D__vita__', '--sysroot=' + SDK + '/arm-vita-eabi', '-isystem', SDK + '/arm-vita-eabi/include',
+         '-fno-pic', '-ffunction-sections', '-fdata-sections', '-Wno-unused-command-line-argument']
+CC = ['clang++' if CXX else 'clang'] + FLAGS
+args = sys.argv[1:]
+compileOnly = any(a in ('-c', '-S', '-E', '-M', '-MM') for a in args)
+if compileOnly or not args or args in (['--version'], ['-v'], ['-dumpversion'], ['-dumpmachine']):
+    if args == ['-dumpmachine']:
+        print('arm-vita-eabi'); sys.exit(0)
+    os.execvp(CC[0], CC + args)
+
+SRC = ('.c', '.cc', '.cpp', '.cxx', '.s', '.S', '.m')
+# Options that take a value as the next argument (compile side or link side).
+TAKES = {'-o', '-I', '-D', '-U', '-include', '-isystem', '-MF', '-MT', '-MQ', '-x', '-L', '-l', '-specs', '-T', '-Xlinker', '-iquote'}
+compileFlags, linkArgs, sources = [], [], []
+i = 0
+while i < len(args):
+    a = args[i]
+    nxt = args[i + 1] if i + 1 < len(args) else None
+    if a in TAKES and nxt is not None:
+        pair = [a, nxt]
+        if a in ('-I', '-D', '-U', '-include', '-isystem', '-x', '-iquote'):
+            compileFlags += pair
+        else:
+            linkArgs += pair
+        i += 2
+        continue
+    if a.startswith('-'):
+        if a.startswith(('-Wl,', '-l', '-L', '-T')) or a in ('-pthread', '-static', '-nostdlib', '-nostartfiles'):
+            linkArgs.append(a)
+            if a == '-pthread':
+                compileFlags.append(a)
+        else:
+            compileFlags.append(a)
+    elif a.endswith(SRC):
+        sources.append(a)
+    else:
+        linkArgs.append(a)
+    i += 1
+
+tmp = tempfile.mkdtemp(prefix='vitacc')
+objs = []
+for n, s in enumerate(sources):
+    o = os.path.join(tmp, '%d_%s.o' % (n, os.path.basename(s)))
+    rc = subprocess.call(CC + compileFlags + ['-c', s, '-o', o])
+    if rc:
+        sys.exit(rc)
+    objs.append(o)
+rc = subprocess.call([os.path.join(SDK, 'bin', 'arm-vita-eabi-link')] + objs + linkArgs)
+for o in objs:
+    os.remove(o)
+os.rmdir(tmp)
+sys.exit(rc)

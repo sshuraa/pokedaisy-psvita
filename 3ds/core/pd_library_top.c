@@ -15,7 +15,10 @@
 #define TOP_H 240
 #define HINT_H 22
 
+char lib_last_hint[128];
+
 void lib_hint_bar(struct pd_canvas* c, const char* text) {
+    snprintf(lib_last_hint, sizeof lib_last_hint, "%s", text);
     uint32_t fill = pd_dark ? 0x1A1D24 : 0x404850, shadow = pd_dark ? 0x000000 : 0x606870;
     int y = c->h - HINT_H;
     pd_fill(c, 0, y, c->w, HINT_H, fill);
@@ -251,7 +254,11 @@ static void settings_top(struct pd_library* l, struct pd_canvas* c) {
         { "THEME", "The colours of every window, here and in the companion." },
         { "DARK MODE", "Darker windows and backdrops." },
         { "VIEW", "How the game is drawn on the top screen: its own picture at a size, or EXPAND's map past its edges." },
+        { "COMPANION VIEW", "In a game: a WINDOW over the game, or a SIDE PANEL beside it." },
+        { "BACKGROUND", "The theme's colours and pictures, moving gently behind everything; OFF is black." },
+        { "OVERLAY", "A frame around the game, which then shows at a whole size: DAISY, BEZEL or NONE." },
         { "GAME VOLUME", "How loud the game plays." },
+        { "CLICK SOUND", "The game's own menu click on every button, here and in the companion." },
         { "MUTE GAME", "No game sound at all." },
         { "BATTLE STYLE", "The battle buttons as HeartGold's or Black's." },
         { "BATTLE HINTS", "Ratings of each move against the foe." },

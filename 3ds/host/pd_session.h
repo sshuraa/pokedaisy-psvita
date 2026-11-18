@@ -210,6 +210,16 @@ struct pd_session {
     // STATES.
     int undoSaveSlot; // the slot a SAVE replaced, -1 = none
     uint32_t thumbs[PD_STATE_SLOTS][PD_STATE_THUMB_W * PD_STATE_THUMB_H];
+
+    // One screen (the Vita; set before pd_session_start): the game alone on it and the companion opened over it, as the
+    // app has it on a one-screen device. The HUD has its buttons (PC, BAG, WILD, COMPANION) and they and the QUICK MENU
+    // are tapped (pd_session_touch); the QUICK MENU has COMPANION; no focus strip, and the buttons stay with the companion
+    // off the field (the host decides when they come back).
+    bool oneScreen;
+    bool companionAsk;       // the companion was asked for (the QUICK MENU's COMPANION, a HUD part): the host opens it on ui.tab
+    struct hud_hits hudHits; // where the HUD's parts were drawn last (top-screen pixels)
+    bool tapDown;
+    int tapX0, tapY0, tapX, tapY;
 };
 
 // The core has its ROM and save and has been reset, [video] is the buffer it draws in. Sets up what the companion
@@ -227,6 +237,9 @@ bool pd_session_action(struct pd_session* s, enum pd_action action);
 // X on the field: the game's buttons go to the companion (Android's bottom focus), a silver strip on the game's picture
 // pointing down at it. Leaving the field brings them back by itself.
 bool pd_session_can_focus(const struct pd_session* s);
+// One screen: a finger on the game's screen, in top-screen pixels (PD_TOP_W x PD_TOP_H), down every frame it's held, then
+// up. A tap picks a QUICK MENU tile or list row (outside them closes it) or presses the HUD part it started and ended on.
+bool pd_session_touch(struct pd_session* s, int x, int y, bool down); // true: a tap that did something
 void pd_session_set_focus(struct pd_session* s, bool on);
 // Draws the companion on the bottom canvas.
 void pd_session_draw(struct pd_session* s, struct pd_canvas* bottom);

@@ -114,7 +114,16 @@ struct pd_settings {
     bool instantText;    // INSTANT TEXT: a text box's words at once (InstantText.kt's patch)
     bool tradeEvos;      // TRADE EVOS: the summary's EVOLVE for a Pokémon that evolves by trading
     int sceneSpeed[5];   // SCENE SPEEDS (BATTLE, TEXT, MENU, BIKE, SURF) while FF is off: an index into PD_SCENE_SPEEDS, 0 = SAME
+    // Hosts with one screen (oneScreen, the Vita):
+    bool companionPanel; // COMPANION VIEW: SIDE PANEL (beside the game); off = WINDOW (over it, the app's default)
+    bool backgroundOff;  // BACKGROUND: OFF (black behind the screens); off = ANIMATED, the theme's
+    int overlayFrame;    // OVERLAY: the frame around the game (the app's built-in ones): PD_FRAME_*
+    bool clickSound;     // CLICK SOUND: the game's own menu click on the companion's and the library's buttons
 };
+enum { PD_FRAME_NONE, PD_FRAME_DAISY, PD_FRAME_BEZEL, PD_FRAMES };
+static inline const char* pd_frame_name(int frame) {
+    return frame == PD_FRAME_DAISY ? "DAISY" : frame == PD_FRAME_BEZEL ? "BEZEL" : "NONE";
+}
 
 // NUZLOCKE's changes from its tab (PD_ACTION_NUZLOCKE_EDIT).
 enum pd_nuz_edit { PD_NUZ_EDIT_OUTCOME = 1, PD_NUZ_EDIT_DEAD, PD_NUZ_EDIT_ALIVE, PD_NUZ_EDIT_NEW_RUN, PD_NUZ_EDIT_DUPES, PD_NUZ_EDIT_WARNINGS };
@@ -212,6 +221,7 @@ struct pd_host_info {
     bool fullSettings;  // Optional: SETTINGS' groups and the rows the 3DS has
     bool wildSupported, fieldSupported; // WILD ENCOUNTERS / the field read works on this game
     bool hasCoreRows;    // the compact list adds AUTO-RUN (with fieldSupported), DARK MODE and RESET SETTINGS (the libretro cores)
+    bool oneScreen;      // Optional: the game and the companion share one screen (the Vita): COMPANION VIEW and BACKGROUND rows
     int batteryPct;     // -1 = unknown
     bool charging;      // the battery is charging (a bolt by it)
     bool flyReady;      // MAP's FLY button: someone in the party can
@@ -592,6 +602,8 @@ void pd_ui_draw(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g,
 // Stylus: down / held / up at (x, y). Returns true if the screen needs a redraw.
 bool pd_ui_touch(struct pd_ui* ui, int x, int y, bool down);
 // Buttons the GBA doesn't have (the 3DS's X / Y): next / previous tab, BACK.
+// Where a tab is along the tab bar (a host sliding between tabs: CompanionScreen's barIndex); one under MORE comes after.
+int pd_ui_bar_index(const struct pd_ui* ui, enum pd_tab t);
 // Controller access to the same TAB BAR / MORE overlays used by touch hosts.
 int pd_ui_tab_menu_count(const struct pd_ui*);
 void pd_ui_tab_menu_focus(struct pd_ui*, int row);

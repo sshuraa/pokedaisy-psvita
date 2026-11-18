@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+# The link half of the clang-based arm-vita-eabi-gcc: what VitaSDK's GCC driver and its patched GNU ld do, on ld.lld.
+#   - text at 0x81000000, segments on 64 KiB (binutils' armvita emulation), rodata in the text segment, no RELRO split:
+#     two PT_LOADs, as vita-elf-create expects them
+#   - relocations kept in the output (VitaSDK's -Wl,-q) for vita-elf-create, PIC veneers (its armelf.em patch)
+#   - crt0.o, then the libraries the GCC driver adds (LIB_SPEC: libc and the kernel stubs), then compiler-rt for libgcc
+import os, subprocess, sys
+
+SDK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LIB = os.path.join(SDK, 'arm-vita-eabi', 'lib')
+
+out = 'a.out'
+inputs = []      # objects, archives, -l / -L in command-line order
+extra = []       # -Wl,... options
+pthread = False
+required = []  # GNU ld's --require-defined, which lld lacks: --undefined, then checked in the output
+args = sys.argv[1:]
+i = 0
+while i < len(args):
+    a = args[i]
+    if a == '-o':
+        out = args[i + 1]; i += 2; continue
+    if a.startswith('-Wl,'):
+        ws = a[4:].split(',')
+        j = 0
+        while j < len(ws):
+            w = ws[j]
+            if w in ('-q', '--emit-relocs'):
+                pass  # always on
+            elif w == '--require-defined' and j + 1 < len(ws):
+                required.append(ws[j + 1]); j += 1
+            elif w.startswith('--require-defined='):
+                required.append(w.split('=', 1)[1])
+            else:
+                extra.append(w)
+            j += 1
+    elif a == '-Xlinker':
+        extra.append(args[i + 1]); i += 1
+    elif a in ('-pthread', '-lpthread'):
+        pthread = True
+    elif a.startswith('-l') or a.startswith('-L'):
+        if a in ('-l', '-L'):
+            inputs.append(a + args[i + 1]); i += 1
+        else:
+            inputs.append(a)
+    elif a.startswith('-'):
+        # Compile-only flags the driver would have taken (-O2, -g, -f..., -m..., -D, -I, -std, -W..., -specs ...).
+        if a in ('-I', '-D', '-include', '-isystem', '-MF', '-MT', '-MQ', '-x', '-specs', '-T'):
+            if a == '-T':
+                extra += ['-T', args[i + 1]]
+            i += 1
+    else:
+        inputs.append(a)
+    i += 1
+
+cmd = ['ld.lld', '--emit-relocs', '--image-base=0x81000000', '-z', 'max-page-size=0x10000', '-z', 'common-page-size=0x10000',
+       '--no-rosegment', '-z', 'separate-loadable-segments', '-z', 'norelro', '--pic-veneer', '--build-id=none', '-z', 'noexecstack',
+       '-L' + LIB, '-o', out, os.path.join(LIB, 'crt0.o'), os.path.join(LIB, 'crti.o')]
+cmd += inputs
+cmd += extra
+cmd += ['--undefined=' + r for r in required]
+stubs = ['-lSceRtc_stub', '-lSceSysmem_stub', '-lSceKernelThreadMgr_stub', '-lSceKernelModulemgr_stub', '-lSceIofilemgr_stub',
+         '-lSceProcessmgr_stub', '-lSceLibKernel_stub', '-lSceNet_stub', '-lSceNetCtl_stub', '-lSceSysmodule_stub']
+cmd += ['--start-group']
+if pthread:
+    cmd += ['--whole-archive', '-lpthread', '--no-whole-archive']
+cmd += ['-lc', '-lm'] + stubs + [os.path.join(LIB, 'libclang_rt.builtins-arm.a'), '--end-group']
+if os.environ.get('VITA_LINK_VERBOSE'):
+    print(' '.join(cmd), file=sys.stderr)
+rc = subprocess.call(cmd)
+if rc == 0 and required:
+    syms = subprocess.run(['llvm-nm', '--defined-only', out], capture_output=True, text=True).stdout.split()
+    missing = [r for r in required if r not in syms]
+    if missing:
+        print('ld.lld: error: required symbol(s) not defined: ' + ', '.join(missing), file=sys.stderr)
+        os.remove(out)
+        rc = 1
+sys.exit(rc)

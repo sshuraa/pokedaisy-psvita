@@ -6,8 +6,16 @@
 #include "pd_library.h"
 #include "pd_style.h"
 
-#define LIB_W 320
-#define LIB_H 240
+// The touch screen's size: the 3DS's 320x240, or a host's one screen (pd_library_screen).
+#define LIB_W lib_w
+#define LIB_H lib_h
+#define LIB_W_MAX 480
+#define LIB_H_MAX 272
+extern int lib_w, lib_h;
+extern bool lib_one_screen; // pd_library_screen was called
+uint32_t lib_saves_screen(const struct pd_library* l);
+// The page's backdrop on a host's one screen: this colour alone (the host makes it see-through), -1 = the 3DS's.
+extern int64_t lib_page_clear;
 #define RAIL_W 44
 #define LIB_M 4 // the touch screen's margin: beside the rail, at the right, top and bottom, and between windows
 #define PAGE_X (RAIL_W + LIB_M)

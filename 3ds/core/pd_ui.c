@@ -261,6 +261,14 @@ static int chips(const struct pd_ui* ui, const struct pd_game* g, enum pd_tab ou
     return n;
 }
 
+int pd_ui_bar_index(const struct pd_ui* ui, enum pd_tab t) {
+    enum pd_tab tabs[PD_MAX_BAR_TABS + 1];
+    int n = chips(ui, ui->drawnGame, tabs);
+    for (int i = 0; i < n; i++)
+        if (tabs[i] == t) return i;
+    return n + (int) t; // under MORE (and SETTINGS): after the bar, as its chips are
+}
+
 static bool on_bar(const struct pd_ui* ui, enum pd_tab t) {
     enum pd_tab tabs[PD_MAX_BAR_TABS + 1];
     int n = chips(ui, ui->drawnGame, tabs);
@@ -605,6 +613,16 @@ static void act(struct pd_ui* ui, int id) {
         bool* flag = id == HIT_SETTING + SETTING_DARK ? &ui->settings->darkMode :
             id == HIT_SETTING + SETTING_FF_MODE ? &ui->settings->ffNormal : &ui->settings->cheats;
         *flag = !*flag;
+        ui->action = PD_ACTION_SETTINGS_CHANGED;
+    } else if (id == HIT_SETTING + SETTING_COMPANION_VIEW || id == HIT_SETTING + SETTING_BACKGROUND) {
+        bool* flag = id == HIT_SETTING + SETTING_COMPANION_VIEW ? &ui->settings->companionPanel : &ui->settings->backgroundOff;
+        *flag = !*flag;
+        ui->action = PD_ACTION_SETTINGS_CHANGED;
+    } else if (id == HIT_SETTING + SETTING_CLICK) {
+        ui->settings->clickSound = !ui->settings->clickSound;
+        ui->action = PD_ACTION_SETTINGS_CHANGED;
+    } else if (id == HIT_SETTING + SETTING_FRAME) {
+        ui->settings->overlayFrame = (ui->settings->overlayFrame + 1) % PD_FRAMES;
         ui->action = PD_ACTION_SETTINGS_CHANGED;
     } else if (id == HIT_SETTING + SETTING_RESET) {
         ui->overlay = PD_OVERLAY_CONFIRM_RESET;

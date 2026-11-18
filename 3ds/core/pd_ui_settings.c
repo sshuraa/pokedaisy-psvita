@@ -294,6 +294,7 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
         snprintf(buf, sizeof(buf), "%d%%", st->gameVolume);
         setting(ui, c, ix, &y, iw, SETTING_VOLUME, "GAME VOLUME", buf);
         setting(ui, c, ix, &y, iw, SETTING_MUTE, "MUTE GAME", st->gameMuted ? "ON" : "OFF");
+        if (host->oneScreen) setting(ui, c, ix, &y, iw, SETTING_CLICK, "CLICK SOUND", st->clickSound ? "ON" : "OFF");
         group(c, ix, &y, "GAMEPLAY");
         if (host->wildSupported) setting(ui, c, ix, &y, iw, SETTING_WILD, "WILD ENCOUNTERS", st->wildOff ? "OFF" : "ON");
         else muted_row(c, ix, &y, iw, "WILD ENCOUNTERS", "N/A");
@@ -381,6 +382,11 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
         for (int i = 0; i < pd_theme_count; i++)
             if (pd_themes[i].id == st->theme) themeName = pd_themes[i].label;
         setting(ui, c, ix, &y, iw, SETTING_THEME, "THEME", themeName);
+        if (host->oneScreen) {
+            setting(ui, c, ix, &y, iw, SETTING_COMPANION_VIEW, "COMPANION VIEW", st->companionPanel ? "SIDE PANEL" : "WINDOW");
+            setting(ui, c, ix, &y, iw, SETTING_BACKGROUND, "BACKGROUND", st->backgroundOff ? "OFF" : "ANIMATED");
+            setting(ui, c, ix, &y, iw, SETTING_FRAME, "OVERLAY", pd_frame_name(st->overlayFrame));
+        }
         group(c, ix, &y, "COMPANION");
         setting(ui, c, ix, &y, iw, SETTING_BATTLE_INFO, "BATTLE INFO", st->noBattleInfo ? "OFF" : "ON");
         if (!st->noBattleInfo) {

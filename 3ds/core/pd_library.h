@@ -28,6 +28,13 @@ enum pd_console { PD_CONSOLE_GBA, PD_CONSOLE_GB, PD_CONSOLE_GBC };
 enum pd_game_core { PD_CORE_AUTO, PD_CORE_ARMGBA, PD_CORE_MGBA, PD_CORE_GPSP, PD_CORE_COUNT };
 const char* pd_core_name(int core);
 
+// A host with one screen (the Vita): the touch screen's page at [w] x [h] (at most 480 x 272) instead of 320 x 240, its
+// backdrop filled with [clear] alone (0xRRGGBB, which the host shows see-through), or -1 for the 3DS's own; and SETTINGS >
+// SCREEN gets COMPANION VIEW and BACKGROUND (pd_settings.companionPanel / backgroundOff). Call before pd_library_init.
+void pd_library_screen(int w, int h, int64_t clear);
+// The words on the top screen's hint bar as last drawn (pd_library_draw_top), for a host that shows the hints itself.
+extern char lib_last_hint[128];
+
 // The keys the host passes (its own buttons mapped to these).
 enum {
     PD_LIB_A = 1 << 0, PD_LIB_B = 1 << 1, PD_LIB_X = 1 << 2, PD_LIB_Y = 1 << 3, PD_LIB_L = 1 << 4, PD_LIB_R = 1 << 5,
@@ -126,6 +133,10 @@ struct pd_library {
 };
 
 void pd_library_init(struct pd_library* l, struct pd_settings* settings, const struct pd_library_host* host);
+// Which screen of the page shows (not the cursor): it changes when a pick-list, a dialog or one of the save tools' screens
+// opens or closes. A host with transitions animates between two.
+uint32_t pd_library_screen_key(const struct pd_library* l);
+
 // After the games' files are filled in: names what the file names give, sorts, lists the view.
 void pd_library_refresh(struct pd_library* l);
 // Once a frame: names a few more games by their contents (header, hash), a slice at a time.

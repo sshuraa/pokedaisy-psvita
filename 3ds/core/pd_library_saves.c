@@ -93,6 +93,16 @@ static uint8_t readBuf[PD_SAVE_MAX_SIZE];
 static struct pd_missing missing[MISSING_MAX];
 static struct pd_save missingSave; // each other save in turn, read for MISSING
 
+// Which of the save tools' screens shows (a host animating between them): its stage, tab, side, a Pokémon's page, MISSING,
+// a dialog, a pick-list or a number.
+uint32_t lib_saves_screen(const struct pd_library* l) {
+    const struct pd_library_saves* t = l->saves;
+    if (!t) return 0;
+    return (uint32_t) t->stage | (uint32_t) (t->tab & 15) << 4 | (uint32_t) (t->active & 1) << 8 | (uint32_t) t->monPage << 9 |
+           (uint32_t) t->missingOpen << 10 | (uint32_t) (t->dialog & 15) << 11 | (uint32_t) (t->pickOf & 63) << 15 |
+           (uint32_t) (t->numberOf & 63) << 21;
+}
+
 static struct pd_library_saves* S(struct pd_library* l) {
     if (!l->saves) l->saves = &state;
     return l->saves;

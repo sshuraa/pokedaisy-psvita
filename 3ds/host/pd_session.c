@@ -33,6 +33,7 @@
 #include "../core/pd_map.h"
 #include "../core/pd_romart.h"
 #include "../core/pd_dex.h"
+#include "../core/pd_guide.h"
 #include "../core/pd_style.h"
 
 // What a save state keeps: the RTC, never the save data - loading one must not write an old copy over the save file
@@ -1076,6 +1077,7 @@ static void quick_items(struct pd_session* s) {
     q[n++] = (struct quick_item) { QUICK_LOAD_STATE, false, false,
                                    s->host.slots[s->host.slotSelected].used ? NULL : "No state saved yet", 0, 0, NULL };
     q[n++] = (struct quick_item) { QUICK_FF, false, s->ff, NULL, 0, 0, NULL };
+    if (s->oneScreen) q[n++] = (struct quick_item) { QUICK_COMPANION, false, false, NULL, 0, 0, NULL };
     s->quickCount = n;
     if (s->quickSel >= n) s->quickSel = 0;
 }
@@ -1126,6 +1128,9 @@ static void quick_run(struct pd_session* s, const struct quick_item* item) {
         break;
     case QUICK_FF:
         s->ffToggled = !s->ffToggled;
+        break;
+    case QUICK_COMPANION:
+        s->companionAsk = true;
         break;
     default:
         break;
@@ -1710,6 +1715,93 @@ void pd_session_set_focus(struct pd_session* s, bool on) {
     s->redraw = true;
 }
 
+// WILD's badge (the libretro core's hud_wild_uncaught): this map's wild species not caught yet, -1 = no wild data here.
+static int hud_wild_uncaught(const struct pd_game* g, const struct pd_snapshot* s) {
+    struct pd_wild_set w;
+    if (!g->cfg || (!g->cfg->gb && !g->cfg->wildHeaders)) return -1; // the Game Boy games' come from their GUIDE data
+    if (!pd_wild_here(g, s, &w)) return -1;
+    int seen[PD_WILD_METHODS * PD_WILD_MAX], n = 0, left = 0;
+    for (int m = 0; m < PD_WILD_METHODS; m++)
+        for (int i = 0; i < w.count[m]; i++) {
+            int sp = w.mons[m][i].species, k = 0;
+            while (k < n && seen[k] != sp) k++;
+            if (k < n) continue;
+            seen[n++] = sp;
+            left += !pd_dex_caught(s, pd_dex_national(g, sp));
+        }
+    return n ? left : -1;
+}
+
+static int hud_hit(const struct pd_session* s, int x, int y) {
+    for (int i = s->hudHits.n - 1; i >= 0; i--) {
+        const struct hud_hits* h = &s->hudHits;
+        if (x >= h->at[i].x && x < h->at[i].x + h->at[i].w && y >= h->at[i].y && y < h->at[i].y + h->at[i].h) return h->at[i].id;
+    }
+    return -1;
+}
+
+// A HUD part pressed (the libretro core's hud_press): its companion tab, or the game's PC.
+static void hud_press(struct pd_session* s, int id) {
+    struct pd_ui* ui = &s->ui;
+    if (id == HUD_PC) {
+        struct quick_item pc = { QUICK_PC, false, false, NULL, 0, 0, NULL };
+        if (!on_field(s)) pd_session_show(s, "You can't do that now.");
+        else quick_run(s, &pc);
+        return;
+    }
+    if (id >= HUD_SLOT && id < HUD_SLOT + PD_PARTY_SIZE) {
+        ui->tab = PD_TAB_PARTY;
+        ui->summarySlot = id - HUD_SLOT;
+        ui->summaryLearnRow = 0;
+        ui->summaryLearn = ui->summaryInfo = ui->summaryStats = false;
+    } else if (id == HUD_MAP || id == HUD_MAP_BUTTON) {
+        ui->tab = PD_TAB_MAP;
+        ui->mapPage = -1;
+    } else if (id == HUD_BALLS || id == HUD_REPEL || id == HUD_BAG) {
+        ui->tab = PD_TAB_BAG;
+    } else if (id == HUD_WILD) {
+        ui->tab = PD_TAB_GUIDE;
+        ui->guidePage = 0;
+        pd_ui_guide_reset(ui);
+    }
+    ui->overlay = PD_OVERLAY_NONE;
+    s->companionAsk = true;
+    s->redraw = true;
+}
+
+bool pd_session_touch(struct pd_session* s, int x, int y, bool down) {
+    if (down) {
+        if (!s->tapDown) s->tapX0 = x, s->tapY0 = y;
+        s->tapDown = true;
+        s->tapX = x, s->tapY = y;
+        return false;
+    }
+    if (!s->tapDown) return false;
+    s->tapDown = false;
+    x = s->tapX, y = s->tapY;
+    if (s->quickOpen) {
+        // A tile, or a FLY / REPEL row, is picked as A picks it; anywhere else is B.
+        struct pd_input in = { 0 };
+        in.stickAngle = -1;
+        int i = s->flyList || s->repelList ? quick_list_hit(x, y) : quick_hit(x, y);
+        if (i >= 0) {
+            if (s->flyList) s->flySel = i;
+            else if (s->repelList) s->repelSel = i;
+            else s->quickSel = i;
+            in.down = PD_KEY_A;
+        } else {
+            in.down = PD_KEY_B;
+        }
+        quick_input(s, &in);
+        s->overlayKey = 0;
+        return true;
+    }
+    int id = hud_hit(s, s->tapX0, s->tapY0);
+    if (id < 0 || id != hud_hit(s, x, y)) return false;
+    hud_press(s, id);
+    return true;
+}
+
 // CompanionFocusStripe: down the bottom of the game's picture, in the game's own pixels. A dark edge, a shine, a silver
 // fall-off, a foot line, and an arrow bobbing down at the companion.
 #define STRIPE_ROWS 22
@@ -1788,7 +1880,7 @@ static void overlay_update(struct pd_session* s) {
         key ^= hud_key(&s->game, &s->shown, &s->hud, hudSettings) ^ (flying ? 0x5A5Au : 0);
     }
     key = key * 31 + (uint32_t) picture;
-    if (s->ui.keyFocus) key = key * 31 + 0x9E37u + (uint32_t) (bob * 16 + s->stripeIn);
+    if (s->ui.keyFocus) key = key * 31 + 0x9E37u + (uint32_t) (s->oneScreen ? 0 : bob * 16 + s->stripeIn);
     for (const char* p = s->noticeFrames > 0 ? s->notice : ""; *p; p++) key = key * 33 + (uint8_t) *p;
     if (key == s->overlayKey) return;
     s->overlayKey = key;
@@ -1809,11 +1901,19 @@ static void overlay_update(struct pd_session* s) {
         else quick_draw(&c, &s->game, s->quick, s->quickCount, s->quickSel, s->settings->hudLook);
         s->overlayShown = true;
     } else if (hud) {
-        s->hud.compact = s->hud.noButtons = true;
+        s->hud.compact = true;
+        s->hud.noButtons = !s->oneScreen;
         s->hud.wild = s->hud.focus = -1;
+        if (s->oneScreen) {
+            // The buttons, as the app's HUD has them on one screen: PC where the game's can open, WILD with this map's
+            // species not caught yet (FieldHud's badge), COMPANION.
+            s->hud.pc = s->pcOk || s->gbField;
+            s->hud.wild = hud_wild_uncaught(&s->game, &s->shown);
+        }
         s->hud.left = (PD_TOP_W - picture) / 2;
         s->hud.right = s->hud.left + picture;
-        s->overlayShown = hud_draw(&c, &s->game, &s->shown, &s->hud, hudSettings, NULL);
+        s->hudHits.n = 0;
+        s->overlayShown = hud_draw(&c, &s->game, &s->shown, &s->hud, hudSettings, s->oneScreen ? &s->hudHits : NULL);
         // The buttons on the companion: the HUD fades back (hudAlpha 0.25).
         for (int i = 0; s->ui.keyFocus && i < PD_TOP_W * PD_TOP_H; i++) {
             uint32_t p = overlayPx[i], a = p >> 24 ? p >> 24 : 0xFF;
@@ -1821,7 +1921,8 @@ static void overlay_update(struct pd_session* s) {
         }
     }
     pd_font_set(gameFont, gameFontCount);
-    if (s->ui.keyFocus) {
+    if (!hud || s->quickOpen) s->hudHits.n = 0;
+    if (s->ui.keyFocus && !s->oneScreen) {
         int left = (PD_TOP_W - picture) / 2, bottom = (PD_TOP_H + pictureH) / 2;
         focus_stripe(&c, left, left + picture, bottom, pictureH, gameRows, bob, s->stripeIn);
         s->overlayShown = true;
@@ -1881,7 +1982,7 @@ void pd_session_tick(struct pd_session* s, const struct pd_input* in, unsigned m
     trade_evo_jobs(s);
     if (s->noticeFrames > 0) s->noticeFrames--;
     // Off the field (a battle, the PC opened from the companion) the buttons are the game's again.
-    if (s->ui.keyFocus && !pd_session_can_focus(s)) pd_session_set_focus(s, false);
+    if (s->ui.keyFocus && !s->oneScreen && !pd_session_can_focus(s)) pd_session_set_focus(s, false);
     overlay_update(s);
 
     s->redraw |= pd_ui_tick(&s->ui, ms);

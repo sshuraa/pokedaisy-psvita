@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+# vita-pack-vpk's command line on Python's zipfile (the real one needs libzip):
+#   vita-pack-vpk -s param.sfo -b eboot.bin [-a src=dest ...] out.vpk
+import os, sys, zipfile
+
+sfo = eboot = out = None
+adds = []
+args = sys.argv[1:]
+i = 0
+while i < len(args):
+    a = args[i]
+    if a in ('-s', '--sfo'):
+        sfo = args[i + 1]; i += 2
+    elif a in ('-b', '--eboot'):
+        eboot = args[i + 1]; i += 2
+    elif a in ('-a', '--add'):
+        adds.append(args[i + 1]); i += 2
+    else:
+        out = a; i += 1
+if not (sfo and eboot and out):
+    sys.exit('usage: vita-pack-vpk -s param.sfo -b eboot.bin [-a src=dest ...] out.vpk')
+with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+    z.write(eboot, 'eboot.bin')
+    z.write(sfo, 'sce_sys/param.sfo')
+    for spec in adds:
+        src, dest = spec.split('=', 1)
+        if os.path.isdir(src):
+            for root, _, files in os.walk(src):
+                for f in files:
+                    p = os.path.join(root, f)
+                    z.write(p, os.path.join(dest, os.path.relpath(p, src)).replace(os.sep, '/'))
+        else:
+            z.write(src, dest)

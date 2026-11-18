@@ -158,6 +158,10 @@ enum setting_row {
     SETTING_INSTANT_TEXT,
     SETTING_TRADE_EVOS,
     SETTING_NUZLOCKE,
+    SETTING_COMPANION_VIEW, // hosts with oneScreen: WINDOW / SIDE PANEL, flips in place
+    SETTING_BACKGROUND,     // ... ANIMATED / OFF
+    SETTING_FRAME,          // ... OVERLAY: NONE / DAISY / BEZEL, steps in place
+    SETTING_CLICK,          // ... CLICK SOUND: ON / OFF
     SETTING_SCENE,      // + enum pd_scene: SCENE SPEEDS' rows, each a pick-list
 };
 

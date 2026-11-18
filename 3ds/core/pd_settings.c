@@ -49,6 +49,10 @@ void pd_settings_defaults(struct pd_settings* s) {
     s->theme = 8; // POKéDAISY
     s->libraryGrid = false;
     s->libraryRecent = false;
+    s->companionPanel = false;
+    s->backgroundOff = false;
+    s->overlayFrame = PD_FRAME_DAISY;
+    s->clickSound = true;
 }
 
 const int PD_FF_SPEEDS[PD_FF_CHOICES] = {2, 3, 4, 5, 6, 8, 10, 0};
@@ -96,6 +100,10 @@ bool pd_settings_load(struct pd_settings* s, const char* path) {
         else if (!strcmp(key, "theme")) int_in(value, 0, 99, &s->theme);
         else if (!strcmp(key, "librarygrid")) s->libraryGrid = atoi(value) != 0;
         else if (!strcmp(key, "libraryrecent")) s->libraryRecent = atoi(value) != 0;
+        else if (!strcmp(key, "companionpanel")) s->companionPanel = atoi(value) != 0;
+        else if (!strcmp(key, "backgroundoff")) s->backgroundOff = atoi(value) != 0;
+        else if (!strcmp(key, "clicksound")) s->clickSound = atoi(value) != 0;
+        else if (!strcmp(key, "overlayframe")) s->overlayFrame = atoi(value) >= 0 && atoi(value) < PD_FRAMES ? atoi(value) : PD_FRAME_NONE;
         else if (!strcmp(key, "aspect")) int_in(value, 0, PD_ASPECTS - 1, &s->aspect);
         else if (!strcmp(key, "autozoom")) {
             int on;
@@ -172,6 +180,8 @@ bool pd_settings_save(const struct pd_settings* s, const char* path) {
     fprintf(f, "quickbtn=%d\ncompanionbtn=%d\nhudbtn=%d\n", s->quickBtn, s->companionBtn, s->hudBtn);
     fprintf(f, "dark=%d\ntheme=%d\nffnormal=%d\ncheats=%d\n", s->darkMode, s->theme, s->ffNormal, s->cheats);
     fprintf(f, "librarygrid=%d\nlibraryrecent=%d\n", s->libraryGrid, s->libraryRecent);
+    fprintf(f, "companionpanel=%d\nbackgroundoff=%d\noverlayframe=%d\nclicksound=%d\n", s->companionPanel, s->backgroundOff,
+            s->overlayFrame, s->clickSound);
     fprintf(f, "speed=%d\nvolume=%d\nnohints=%d\nonetap=%d\nmute=%d\nautorun=%d\nperf=%d\n", s->gameSpeed,
             s->gameVolume, s->hideHints, s->oneTapMoves, s->gameMuted, s->autoRun, s->showPerf ? 1 : 0);
     fprintf(f, "gen5=%d\nnoinfo=%d\ninfofirst=%d\n", s->battleGen5 ? 1 : 0, s->noBattleInfo ? 1 : 0, s->battleInfoFirst ? 1 : 0);
