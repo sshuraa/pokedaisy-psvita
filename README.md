@@ -26,7 +26,7 @@ play: your party, bag, map, battle matchups, Pokedex and a spoiler-free guide, d
   <tr>
     <td width="33%"><img src="vita/preview-photos/PartyScreen.jpg" alt="PARTY: the team in FireRed's own party screen"></td>
     <td width="33%"><img src="vita/preview-photos/BoxesScreen.jpg" alt="BOXES: Manage your pokémons"></td>
-    <td width="33%"><img src="wvita/preview-photos/MapScreen.jpg" alt="MAP: Kanto with the player on it."></td>
+    <td width="33%"><img src="vita/preview-photos/MapScreen.jpg" alt="MAP: Kanto with the player on it."></td>
   </tr>
   <tr>
     <td><b>PARTY</b>: your team in the game's own party screen. Tap one for stats, moves, IVs / EVs and what to learn.</td>
